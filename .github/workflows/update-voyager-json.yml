@@ -8,13 +8,15 @@ on:
 jobs:
   update-json:
     runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true # opt in to Node 24
     steps:
       - uses: actions/checkout@v3
 
       - name: Set up Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: "20"
+          node-version: "24" # explicitly use Node.js 24
 
       - name: Install dependencies
         run: npm install node-fetch@3 @octokit/rest
