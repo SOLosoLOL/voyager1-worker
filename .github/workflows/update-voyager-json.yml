@@ -9,14 +9,14 @@ jobs:
   update-json:
     runs-on: ubuntu-latest
     env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true # opt in Node 24
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
       - uses: actions/checkout@v3
 
       - name: Set up Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: "24" # explicitly Node 24
+          node-version: "24"
 
       - name: Install dependencies
         run: npm install node-fetch@3 @octokit/rest ts-node typescript
@@ -25,6 +25,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "Starting Voyager Worker..."
+          echo "Starting resilient Voyager Worker..."
           npx ts-node .github/scripts/update-voyager-json.ts
           echo "Worker finished."
