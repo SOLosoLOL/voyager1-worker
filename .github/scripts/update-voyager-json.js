@@ -1,18 +1,22 @@
 import fetch from "node-fetch";
 import { Octokit } from "@octokit/rest";
 
-// --- GitHub repo info ---
 const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
 const REPO_OWNER = "SOLosoLOL";
 const REPO_NAME = "voyager1-worker";
 const FILE_PATH = "voyager1-latest.json";
 const BRANCH = "main";
 
-// --- Source JSON URL ---
 const SOURCE_JSON_URL =
   "https://raw.githubusercontent.com/SOLosoLOL/voyager1-worker/main/voyager1.json";
 
-// --- Helper: format countdown to light day ---
+const MAX_RETRIES = 5;
+const RETRY_DELAY_MS = 5000;
+
+function delay(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 function getCountdown(distance_km: number, km_per_light_day: number) {
   const remainingKm = Math.max(km_per_light_day - distance_km, 0);
   const lightDaysLeft = remainingKm / km_per_light_day;
@@ -23,22 +27,67 @@ function getCountdown(distance_km: number, km_per_light_day: number) {
   return `${days}d ${hours}h ${minutes}m`;
 }
 
+async function fetchJsonWithRetry(url: string) {
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+      const data = await res.json();
+      return data;
+    } catch (err: any) {
+      console.error(`Fetch attempt ${attempt} failed: ${err.message}`);
+      if (attempt < MAX_RETRIES) await delay(RETRY_DELAY_MS);
+      else throw new Error("Max retries reached for fetching JSON");
+    }
+  }
+  throw new Error("Unreachable"); // TypeScript safety
+}
+
+async function commitJsonToGitHub(contentObj: any) {
+  try {
+    let sha: string | undefined;
+    try {
+      const resp = await octokit.repos.getContent({
+        owner: REPO_OWNER,
+        repo: REPO_NAME,
+        path: FILE_PATH,
+        ref: BRANCH,
+      });
+      sha = (resp.data as any).sha;
+    } catch {
+      sha = undefined; // file doesn't exist yet
+    }
+
+    await octokit.repos.createOrUpdateFileContents({
+      owner: REPO_OWNER,
+      repo: REPO_NAME,
+      path: FILE_PATH,
+      message: `Update voyager JSON ${new Date().toISOString()}`,
+      content: Buffer.from(JSON.stringify(contentObj, null, 2)).toString(
+        "base64"
+      ),
+      sha,
+      branch: BRANCH,
+    });
+
+    console.log("✅ Voyager JSON updated successfully!");
+  } catch (err: any) {
+    console.error("❌ Failed to commit JSON:", err.message);
+  }
+}
+
 async function run() {
   try {
-    // 1️⃣ Fetch source JSON
-    const response = await fetch(SOURCE_JSON_URL);
-    if (!response.ok) throw new Error(`HTTP error ${response.status}`);
-    const sourceData: any[] = await response.json();
+    const sourceData: any[] = await fetchJsonWithRetry(SOURCE_JSON_URL);
     if (!Array.isArray(sourceData))
       throw new Error("Source JSON is not an array");
 
-    // 2️⃣ Get latest data point
     const latest = sourceData[sourceData.length - 1];
     if (!latest || typeof latest.distance_km !== "number")
       throw new Error("Latest distance_km invalid");
 
     const distanceKm = latest.distance_km;
-    const kmToLightDay = 504272949; // 1 light-day in km
+    const kmToLightDay = 504272949;
     const distanceLightDays = distanceKm / kmToLightDay;
     const oneWaySeconds = distanceLightDays * 86400;
     const hours = Math.floor(oneWaySeconds / 3600);
@@ -57,36 +106,9 @@ async function run() {
       countdown_to_light_day: getCountdown(distanceKm, kmToLightDay),
     };
 
-    // 3️⃣ Get current SHA if file exists
-    let sha: string | undefined;
-    try {
-      const resp = await octokit.repos.getContent({
-        owner: REPO_OWNER,
-        repo: REPO_NAME,
-        path: FILE_PATH,
-        ref: BRANCH,
-      });
-      sha = (resp.data as any).sha;
-    } catch {
-      sha = undefined; // file doesn't exist yet
-    }
-
-    // 4️⃣ Commit updated JSON to GitHub
-    await octokit.repos.createOrUpdateFileContents({
-      owner: REPO_OWNER,
-      repo: REPO_NAME,
-      path: FILE_PATH,
-      message: `Update voyager JSON ${new Date().toISOString()}`,
-      content: Buffer.from(JSON.stringify(updatedJson, null, 2)).toString(
-        "base64"
-      ),
-      sha,
-      branch: BRANCH,
-    });
-
-    console.log("✅ Voyager JSON updated successfully!", updatedJson);
+    await commitJsonToGitHub(updatedJson);
   } catch (err: any) {
-    console.error("❌ Worker failed:", err.message || err);
+    console.error("❌ Worker failed:", err.message);
   }
 }
 
