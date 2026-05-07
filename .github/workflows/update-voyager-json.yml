@@ -1,34 +1,30 @@
-# File: .github/workflows/update-voyager-json.yml
 name: Update Voyager JSON
 
 on:
   schedule:
     - cron: "0 * * * *" # every hour
-  workflow_dispatch: # allows manual run from GitHub
+  workflow_dispatch:
 
 jobs:
   update-json:
     runs-on: ubuntu-latest
     env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true # opt in to Node 24
-
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true # opt in Node 24
     steps:
-      # 1️⃣ Checkout the repository
       - uses: actions/checkout@v3
 
-      # 2️⃣ Set up Node.js 24
       - name: Set up Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: "24"
+          node-version: "24" # explicitly Node 24
 
-      # 3️⃣ Install dependencies and TypeScript tooling
       - name: Install dependencies
-        run: |
-          npm install node-fetch@3 @octokit/rest ts-node typescript
+        run: npm install node-fetch@3 @octokit/rest ts-node typescript
 
-      # 4️⃣ Run the TypeScript worker using ts-node
       - name: Run Voyager Worker
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npx ts-node .github/scripts/update-voyager-json.ts
+        run: |
+          echo "Starting Voyager Worker..."
+          npx ts-node .github/scripts/update-voyager-json.ts
+          echo "Worker finished."
