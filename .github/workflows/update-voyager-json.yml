@@ -17,7 +17,10 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: "24" # explicitly use Node.js 24
-
+      
+      - name: Check Node version
+        run: node -v
+        
       - name: Install dependencies
         run: npm install node-fetch@3 @octokit/rest
 
